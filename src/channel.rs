@@ -224,7 +224,7 @@ impl Channel {
 
                         // once per frame, adjust duty
                         if index < sample_count && sample_index % SAMPLES_PER_FRAME == 0 {
-                            duty = ((duty & 0x3F) << 2) | ((duty & 0xC0) >> 6);
+                            duty = duty.rotate_left(2);
                         }
 
                         // once per frame * fadeamount, adjust volume
