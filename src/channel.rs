@@ -167,7 +167,6 @@ impl Channel {
         let mut duty = 0;
         let mut leftovers = 0;
         let mut period_count = 0.0;
-        let mut sample_index = 0;
 
         let last_index = self.commands.len() - 1;
 
@@ -220,10 +219,8 @@ impl Channel {
                             period_count -= 1.0;
                         }
 
-                        sample_index += 1;
-
                         // once per frame, adjust duty
-                        if index < sample_count && sample_index % SAMPLES_PER_FRAME == 0 {
+                        if index < sample_count && result.len() % SAMPLES_PER_FRAME == 0 {
                             duty = duty.rotate_left(2);
                         }
 
@@ -253,7 +250,7 @@ impl Channel {
 
                     // volume and fade control
                     let mut volume = *volume as isize;
-                    let params = value.wrapping_add(if sample_index >= cutoff.unwrap() {
+                    let params = value.wrapping_add(if result.len() >= cutoff.unwrap() {
                         0
                     } else {
                         pitch
@@ -274,10 +271,9 @@ impl Channel {
 
                         let bit0 = noise_buffer & 1;
                         result.push(sample((1 ^ bit0) as isize, volume));
-                        sample_index += 1;
 
                         // according to params, update buffer
-                        if sample_index
+                        if result.len()
                             % ((2.0
                                 * (if divider == 0 { 0.5 } else { divider as f64 })
                                 * (1 << (shift + 1)) as f64)
