@@ -1,0 +1,14 @@
+[package]
+name = "pokemon-synthesizer"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.66"
+description = "A synthesizer for the sound format of the Pokemon GameBoy games"
+readme = "readme.md"
+repository = "https://github.com/LinusU/pokemon-synthesizer"
+license = "MIT OR Apache-2.0"
+keywords = ["pokemon", "synthesizer", "gameboy", "audio", "gamedev"]
+categories = ["game-development", "multimedia::audio", "multimedia::encoding", "parser-implementations"]
+
+[dev-dependencies]
+rodio = { version = "0.17.1", default-features = false }
