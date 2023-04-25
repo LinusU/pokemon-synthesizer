@@ -174,8 +174,8 @@ impl Channel {
             let is_last_command = index == last_index;
 
             match command {
-                Command::DutyCycle(_duty) => {
-                    duty = *_duty;
+                Command::DutyCycle(a) => {
+                    duty = (a << 6) | (a << 4) | (a << 2) | a;
                 }
 
                 Command::DutyCyclePattern(a, b, c, d) => {
