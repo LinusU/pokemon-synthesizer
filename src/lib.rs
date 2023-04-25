@@ -6,6 +6,7 @@ mod channel;
 mod command;
 mod sound;
 
+#[derive(Debug, Clone)]
 pub struct Pcm {
     pub data: Vec<f32>,
 }
