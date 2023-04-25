@@ -168,4 +168,14 @@ mod tests {
             include_bytes!("../expected/pikachu-cry.wav"),
         );
     }
+
+    #[test]
+    fn test_slowpoke_cry() {
+        let pcm = synthesis(POKEYELLOW, 0x02, 0x404e, 0, 0);
+
+        assert_wav_almost_equal(
+            &convert_to_wav(&pcm),
+            include_bytes!("../expected/slowpoke-cry.wav"),
+        );
+    }
 }
