@@ -59,7 +59,7 @@ impl Channel {
                             pos += 2;
 
                             commands.push(Command::SquareNote {
-                                length: length + 1,
+                                length,
                                 volume,
                                 fade,
                                 freq,
@@ -71,7 +71,7 @@ impl Channel {
                             pos += 1;
 
                             commands.push(Command::NoiseNote {
-                                length: length + 1,
+                                length,
                                 volume,
                                 fade,
                                 value,
