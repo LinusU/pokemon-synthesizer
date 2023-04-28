@@ -31,7 +31,7 @@ impl Pcm {
 
 pub fn synthesis(rom: &[u8], bank: u8, addr: u16, pitch: u8, length: i8) -> Pcm {
     Pcm {
-        data: sound::Sound::parse(rom, bank, addr).pcm(pitch, length),
+        data: sound::Sound::new(rom, bank, addr).pcm(pitch, length).collect(),
     }
 }
 
