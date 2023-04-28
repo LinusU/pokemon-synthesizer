@@ -1,37 +1,52 @@
 use std::time::Duration;
 
 use channel::SOURCE_SAMPLE_RATE;
+use sound::Sound;
+
+pub use sound::SoundIterator;
 
 mod channel;
 mod command;
 mod sound;
 
 #[derive(Debug, Clone)]
-pub struct Pcm {
-    pub data: Vec<f32>,
+pub struct Pcm<'a> {
+    pitch: u8,
+    length: i8,
+    sound: Sound<'a>,
 }
 
-impl Pcm {
+impl<'a> Pcm<'a> {
     pub fn channels(&self) -> u16 {
         1
-    }
-
-    pub fn data(&self) -> &[f32] {
-        &self.data
     }
 
     pub fn sample_rate(&self) -> u32 {
         SOURCE_SAMPLE_RATE as u32
     }
 
-    pub fn total_duration(&self) -> Duration {
-        std::time::Duration::from_secs_f64((self.data.len() as f64) / (self.sample_rate() as f64))
+    pub fn total_duration(&self) -> Option<Duration> {
+        let len = self.sound.pcm(self.pitch, self.length).count();
+
+        if len == usize::MAX {
+            None
+        } else {
+            Some(std::time::Duration::from_secs_f64(
+                (len as f64) / (self.sample_rate() as f64),
+            ))
+        }
+    }
+
+    pub fn iter(&self) -> SoundIterator<'a> {
+        self.sound.pcm(self.pitch, self.length)
     }
 }
 
 pub fn synthesis(rom: &[u8], bank: u8, addr: u16, pitch: u8, length: i8) -> Pcm {
     Pcm {
-        data: sound::Sound::parse(rom, bank, addr).pcm(pitch, length),
+        sound: Sound::new(rom, bank, addr),
+        pitch,
+        length,
     }
 }
 
@@ -45,30 +60,30 @@ mod tests {
     fn convert_to_wav(input: &Pcm) -> Vec<u8> {
         assert_eq!(input.channels(), 1);
 
+        let data: Vec<f32> = input.iter().collect();
+
         let resample_rate_ratio = input.sample_rate() as f64 / 48000.0;
-        let resampled_length = (input.data().len() as f64 / resample_rate_ratio).ceil() as usize;
+        let resampled_length = (data.len() as f64 / resample_rate_ratio).ceil() as usize;
         let mut output = Vec::with_capacity(WAVE_HEADER_LEN + resampled_length);
 
         output.extend(b"RIFF");
-        output.extend(&(resampled_length as u32).to_le_bytes());
+        output.extend((resampled_length as u32).to_le_bytes());
         output.extend(b"WAVEfmt ");
-        output.extend(&16u32.to_le_bytes()); // remaining header size
-        output.extend(&1u16.to_le_bytes()); // PCM type
-        output.extend(&1u16.to_le_bytes()); // channels
-        output.extend(&48000u32.to_le_bytes()); // sample rate
-        output.extend(&48000u32.to_le_bytes()); // byte rate
-        output.extend(&1u16.to_le_bytes()); // block align
-        output.extend(&8u16.to_le_bytes()); // bits per sample
+        output.extend(16u32.to_le_bytes()); // remaining header size
+        output.extend(1u16.to_le_bytes()); // PCM type
+        output.extend(1u16.to_le_bytes()); // channels
+        output.extend(48000u32.to_le_bytes()); // sample rate
+        output.extend(48000u32.to_le_bytes()); // byte rate
+        output.extend(1u16.to_le_bytes()); // block align
+        output.extend(8u16.to_le_bytes()); // bits per sample
         output.extend(b"data");
-        output.extend(&(resampled_length as u32).to_le_bytes());
+        output.extend((resampled_length as u32).to_le_bytes());
 
         assert_eq!(output.len(), WAVE_HEADER_LEN);
 
         fn to_u8(value: f32) -> u8 {
             (value * 127.0 + 128.0) as u8
         }
-
-        let data = input.data();
 
         for resampled_index in 1..resampled_length {
             let prev_index = (resampled_index as f64 * resample_rate_ratio).floor() as usize;
@@ -96,16 +111,15 @@ mod tests {
 
         assert_eq!(&actual[..WAVE_HEADER_LEN], &expected[..WAVE_HEADER_LEN],);
 
-        for (actual, expected) in actual
+        for (index, (actual, expected)) in actual
             .iter()
             .skip(WAVE_HEADER_LEN)
             .zip(expected.iter().skip(WAVE_HEADER_LEN))
+            .enumerate()
         {
             assert!(
                 (*actual as i32 - *expected as i32).abs() <= 1,
-                "actual: {}, expected: {}",
-                actual,
-                expected
+                "actual: {actual}, expected: {expected}, at index: {index}",
             );
         }
     }
