@@ -70,8 +70,12 @@ pub struct ChannelIterator<'a> {
     addr: u16,
     channel: ChannelType,
 
-    pitch: u8,
     length: i8,
+
+    pitch: u8,
+    pitch_sweep: i8,
+    pitch_sweep_delay: u8,
+    pitch_sweep_period: u8,
 
     loop_counter: u8,
     note_delay: u8,
@@ -100,8 +104,12 @@ impl<'a> ChannelIterator<'a> {
             addr: channel.addr,
             channel: channel.channel,
 
-            pitch,
             length,
+
+            pitch,
+            pitch_sweep: 0,
+            pitch_sweep_delay: 0,
+            pitch_sweep_period: 0,
 
             loop_counter: 1,
             note_delay: 0,
@@ -226,6 +234,24 @@ impl Iterator for ChannelIterator<'_> {
                     }
                 }
 
+                // once per frame * fadeamount, adjust pitch
+                match self.pitch_sweep_delay {
+                    0 => {}
+                    1 => {
+                        self.pitch_sweep_delay = self.pitch_sweep_period;
+                        let offset = self.freq >> self.pitch_sweep.unsigned_abs();
+
+                        if self.pitch_sweep < 0 {
+                            self.freq = self.freq.wrapping_sub(offset);
+                        } else {
+                            self.freq = self.freq.wrapping_add(offset);
+                        }
+                    }
+                    _ => {
+                        self.pitch_sweep_delay -= 1;
+                    }
+                }
+
                 return Some(result);
             }
 
@@ -250,6 +276,12 @@ impl Iterator for ChannelIterator<'_> {
 
                 Command::DutyCyclePattern(a, b, c, d) => {
                     self.duty = (a << 6) | (b << 4) | (c << 2) | d;
+                }
+
+                Command::PitchSweep { length, change } => {
+                    self.pitch_sweep = change;
+                    self.pitch_sweep_delay = length;
+                    self.pitch_sweep_period = length;
                 }
 
                 Command::Loop { count, addr } => {

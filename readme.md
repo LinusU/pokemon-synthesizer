@@ -10,7 +10,7 @@ Implementation status:
     - [ ] Wave channels
     - [x] Finite loops
     - [x] Infinite loops
-    - [ ] Pitch sweeps
+    - [x] Pitch sweeps
     - [ ] Music sequences
 - [ ] Future generations
 
