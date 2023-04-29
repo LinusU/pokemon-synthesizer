@@ -40,7 +40,7 @@ impl ChannelType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Channel<'a> {
     rom: &'a [u8],
     bank: u8,
@@ -48,79 +48,17 @@ pub struct Channel<'a> {
     channel: ChannelType,
 }
 
-impl Channel<'_> {
+impl<'a> Channel<'a> {
     pub fn new(rom: &[u8], bank: u8, addr: u16, channel: ChannelType) -> Channel {
         Channel { rom, bank, addr, channel }
     }
 
-    /// Returns the length of the channel in samples, without the fadeout of the last note.
-    ///
-    /// If the channel loops forever, returns None.
-    pub fn len(&self, length: i8) -> Option<usize> {
-        let mut result = 0;
-        let mut leftovers = 0;
-
-        let mut addr = self.addr;
-        let mut channel = self.channel;
-        let mut loop_counter = 1u8;
-
-        loop {
-            let cmd = Command::parse(self.rom, self.bank, addr, channel);
-
-            match cmd {
-                Command::Return => {
-                    return Some(result);
-                }
-
-                Command::ExecuteMusic => {
-                    channel = channel.to_muisc();
-                }
-
-                Command::DutyCycle(_) => {}
-                Command::DutyCyclePattern(_, _, _, _) => {}
-
-                Command::Loop { count, addr: target } => {
-                    if count == 0 {
-                        return None;
-                    }
-
-                    if loop_counter < count {
-                        loop_counter += 1;
-                        addr = target;
-                        continue;
-                    }
-                }
-
-                Command::SquareNote { length: cmd_len, .. } => {
-                    let subframes =
-                        (((length as isize) + 0x100) as usize * ((cmd_len as usize) + 1)) + leftovers;
-                    let thisnote = SAMPLES_PER_FRAME * (subframes >> 8);
-
-                    leftovers = subframes & 0xff;
-                    result += thisnote;
-                }
-
-                Command::NoiseNote { length: cmd_len, .. } => {
-                    let subframes =
-                        (((length as isize) + 0x100) as usize * ((cmd_len as usize) + 1)) + leftovers;
-                    let thisnote = SAMPLES_PER_FRAME * (subframes >> 8);
-
-                    leftovers = subframes & 0xff;
-                    result += thisnote;
-                }
-
-                _ => todo!("Sound length of {:?}", cmd),
-            }
-
-            addr += cmd.len() as u16;
-        }
-    }
-
-    pub fn pcm(&self, pitch: u8, length: i8) -> ChannelIterator {
+    pub fn pcm(self, pitch: u8, length: i8) -> ChannelIterator<'a> {
         ChannelIterator::new(self, pitch, length)
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct ChannelIterator<'a> {
     rom: &'a [u8],
     bank: u8,
@@ -145,10 +83,12 @@ pub struct ChannelIterator<'a> {
 
     period_count: f64,
     is_done: bool,
+
+    is_infinite: Option<bool>,
 }
 
 impl<'a> ChannelIterator<'a> {
-    fn new(channel: &'a Channel, pitch: u8, length : i8) -> ChannelIterator<'a> {
+    fn new(channel: Channel<'a>, pitch: u8, length : i8) -> ChannelIterator<'a> {
         Self {
             rom: channel.rom,
             bank: channel.bank,
@@ -173,6 +113,8 @@ impl<'a> ChannelIterator<'a> {
 
             period_count: 0.0,
             is_done: false,
+
+            is_infinite: None,
         }
     }
 
@@ -182,6 +124,10 @@ impl<'a> ChannelIterator<'a> {
 
     pub fn reset_pitch(&mut self) {
         self.pitch = 0;
+    }
+
+    pub fn is_infinite(&self) -> Option<bool> {
+        self.is_infinite
     }
 }
 
@@ -283,6 +229,7 @@ impl Iterator for ChannelIterator<'_> {
             match cmd {
                 Command::Return => {
                     self.is_done = true;
+                    self.is_infinite = Some(false);
                     continue;
                 }
 
@@ -301,6 +248,7 @@ impl Iterator for ChannelIterator<'_> {
                 Command::Loop { count, addr } => {
                     if count == 0 {
                         self.addr = addr;
+                        self.is_infinite = Some(true);
                         continue;
                     }
 

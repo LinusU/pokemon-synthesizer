@@ -1,6 +1,6 @@
-use crate::channel::{Channel, ChannelType, ChannelIterator, SAMPLES_PER_FRAME};
+use crate::channel::{Channel, ChannelType, ChannelIterator, SAMPLES_PER_FRAME, SOURCE_SAMPLE_RATE};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Sound<'a> {
     pulse1: Option<Channel<'a>>,
     pulse2: Option<Channel<'a>>,
@@ -8,8 +8,8 @@ pub struct Sound<'a> {
     noise: Option<Channel<'a>>,
 }
 
-impl Sound<'_> {
-    pub fn new(rom: &[u8], bank: u8, addr: u16) -> Sound {
+impl<'a> Sound<'a> {
+    pub fn new(rom: &'a [u8], bank: u8, addr: u16) -> Sound<'a> {
         let mut result = Sound {
             pulse1: None,
             pulse2: None,
@@ -67,11 +67,12 @@ impl Sound<'_> {
         result
     }
 
-    pub fn pcm(&self, pitch: u8, length: i8) -> SoundIterator {
+    pub fn pcm(self, pitch: u8, length: i8) -> SoundIterator<'a> {
         SoundIterator::new(self, pitch, length)
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct SoundIterator<'a> {
     pulse1: Option<ChannelIterator<'a>>,
     pulse2: Option<ChannelIterator<'a>>,
@@ -83,7 +84,7 @@ pub struct SoundIterator<'a> {
 }
 
 impl<'a> SoundIterator<'a> {
-    pub fn new(sound: &'a Sound<'a>, pitch: u8, length: i8) -> SoundIterator<'a> {
+    pub fn new(sound: Sound<'a>, pitch: u8, length: i8) -> SoundIterator<'a> {
         SoundIterator {
             pulse1: sound.pulse1.as_ref().map(|c| c.pcm(pitch, length)),
             pulse2: sound.pulse2.as_ref().map(|c| c.pcm(pitch, length)),
@@ -94,10 +95,86 @@ impl<'a> SoundIterator<'a> {
             pitch_has_been_reset: false,
         }
     }
+
+    pub fn channels(&self) -> u16 {
+        1
+    }
+
+    pub fn sample_rate(&self) -> u32 {
+        SOURCE_SAMPLE_RATE as u32
+    }
 }
 
 impl<'a> Iterator for SoundIterator<'a> {
     type Item = f32;
+
+    fn count(mut self) -> usize {
+        let mut result = 0;
+
+        loop {
+            let mut done = true;
+            let mut fadeout = true;
+
+            if let Some(pulse1) = &mut self.pulse1 {
+                if let Some(_) = pulse1.next() {
+                    done = false;
+
+                    if !pulse1.only_fadeout_left() {
+                        fadeout = false;
+                    }
+                }
+
+                if pulse1.is_infinite() == Some(true) {
+                    return usize::MAX;
+                }
+            }
+
+            if let Some(pulse2) = &mut self.pulse2 {
+                if let Some(_) = pulse2.next() {
+                    done = false;
+
+                    if !pulse2.only_fadeout_left() {
+                        fadeout = false;
+                    }
+                }
+
+                if pulse2.is_infinite() == Some(true) {
+                    return usize::MAX;
+                }
+            }
+
+            if let Some(wave) = &mut self.wave {
+                if let Some(_) = wave.next() {
+                    done = false;
+                }
+
+                if wave.is_infinite() == Some(true) {
+                    return usize::MAX;
+                }
+            }
+
+            if let Some(noise) = &mut self.noise {
+                if fadeout && !self.pitch_has_been_reset {
+                    self.pitch_has_been_reset = true;
+                    noise.reset_pitch();
+                }
+
+                if let Some(_) = noise.next() {
+                    done = false;
+                }
+
+                if noise.is_infinite() == Some(true) {
+                    return usize::MAX;
+                }
+            }
+
+            if done {
+                return result;
+            }
+
+            result += SAMPLES_PER_FRAME;
+        }
+    }
 
     fn next(&mut self) -> Option<f32> {
         if self.index % SAMPLES_PER_FRAME == 0 {
