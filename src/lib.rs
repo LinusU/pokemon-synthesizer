@@ -96,16 +96,15 @@ mod tests {
 
         assert_eq!(&actual[..WAVE_HEADER_LEN], &expected[..WAVE_HEADER_LEN],);
 
-        for (actual, expected) in actual
+        for (index, (actual, expected)) in actual
             .iter()
             .skip(WAVE_HEADER_LEN)
             .zip(expected.iter().skip(WAVE_HEADER_LEN))
+            .enumerate()
         {
             assert!(
                 (*actual as i32 - *expected as i32).abs() <= 1,
-                "actual: {}, expected: {}",
-                actual,
-                expected
+                "actual: {actual}, expected: {expected}, at index: {index}",
             );
         }
     }

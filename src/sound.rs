@@ -78,6 +78,7 @@ pub struct SoundIterator<'a> {
     wave: Option<ChannelIterator<'a>>,
     noise: Option<ChannelIterator<'a>>,
     index: usize,
+    buffer: [f32; SAMPLES_PER_FRAME],
     reset_pitch_at: usize,
     pitch_has_been_reset: bool,
 }
@@ -94,8 +95,9 @@ impl<'a> SoundIterator<'a> {
             pulse1: sound.pulse1.as_ref().map(|c| c.pcm(pitch, length)),
             pulse2: sound.pulse2.as_ref().map(|c| c.pcm(pitch, length)),
             wave: sound.wave.as_ref().map(|c| c.pcm(pitch, length)),
-            noise: sound.noise.as_ref().map(|c| c.pcm(pitch, length)),
+            noise: sound.noise.as_ref().map(|c| c.pcm(pitch, 0)),
             index: 0,
+            buffer: [0.0; SAMPLES_PER_FRAME],
             reset_pitch_at: usize::max(pulse1_len, pulse2_len) - SAMPLES_PER_FRAME,
             pitch_has_been_reset: false,
         }
@@ -106,75 +108,78 @@ impl<'a> Iterator for SoundIterator<'a> {
     type Item = f32;
 
     fn next(&mut self) -> Option<f32> {
-        // FIXME: Set pitch of noise channel to 0 when pulse channels are done (minus the fade out of the last note)
+        if self.index % SAMPLES_PER_FRAME == 0 {
+            self.buffer.fill(0.0);
 
-        let mut result = 0.0;
-        let mut done = true;
-        let mut almost_done = true;
+            let mut done = true;
+            let mut fadeout = true;
 
-        if let Some(pulse1) = &mut self.pulse1 {
-            if let Some(sample) = pulse1.next() {
-                result += sample / 3.0;
-                done = false;
+            if let Some(pulse1) = &mut self.pulse1 {
+                if let Some(data) = pulse1.next() {
+                    for i in 0..SAMPLES_PER_FRAME {
+                        self.buffer[i] += data[i] / 3.0;
+                    }
 
-                if !pulse1.only_fadeout_left() {
-                    almost_done = false;
+                    done = false;
+
+                    if !pulse1.only_fadeout_left() {
+                        fadeout = false;
+                    }
                 }
             }
-        }
 
-        if let Some(pulse2) = &mut self.pulse2 {
-            if let Some(sample) = pulse2.next() {
-                result += sample / 3.0;
-                done = false;
+            if let Some(pulse2) = &mut self.pulse2 {
+                if let Some(data) = pulse2.next() {
+                    for i in 0..SAMPLES_PER_FRAME {
+                        self.buffer[i] += data[i] / 3.0;
+                    }
 
-                if !pulse2.only_fadeout_left() {
-                    almost_done = false;
+                    done = false;
+
+                    if !pulse2.only_fadeout_left() {
+                        fadeout = false;
+                    }
                 }
             }
-        }
 
-        if let Some(wave) = &mut self.wave {
-            if let Some(sample) = wave.next() {
-                result += sample / 3.0;
-                done = false;
+            if let Some(wave) = &mut self.wave {
+                if let Some(data) = wave.next() {
+                    for i in 0..SAMPLES_PER_FRAME {
+                        self.buffer[i] += data[i] / 3.0;
+                    }
+
+                    done = false;
+                }
+            }
+
+            if let Some(noise) = &mut self.noise {
+                if self.index == self.reset_pitch_at {
+                    eprintln!("Should reset noise pitch here");
+                }
+
+                if fadeout && !self.pitch_has_been_reset {
+                    println!("Want to reset pitch at index {}, should be {}", self.index, self.reset_pitch_at);
+                    self.pitch_has_been_reset = true;
+                    noise.reset_pitch();
+                }
+
+                if let Some(data) = noise.next() {
+                    for i in 0..SAMPLES_PER_FRAME {
+                        self.buffer[i] += data[i] / 3.0;
+                    }
+
+                    done = false;
+                }
+            }
+
+            if done {
+                return None;
             }
         }
 
-        if (self.index - 1) == self.reset_pitch_at {
-            eprintln!("almost_done should be false at index {}, is {}", self.index, almost_done);
-        }
-
-        if self.index == self.reset_pitch_at {
-            eprintln!("almost_done should be true at index {}, is {}", self.index, almost_done);
-        }
-
-        if !self.pitch_has_been_reset && almost_done {
-            eprintln!("almost_done was true at index {}, should be at index {}", self.index, self.reset_pitch_at);
-            self.pitch_has_been_reset = true;
-        }
-
-        if let Some(noise) = &mut self.noise {
-            // if almost_done && !self.pitch_has_been_reset {
-            //     // eprintln!("Resetting noise pitch");
-            //     noise.reset_pitch();
-            //     self.pitch_has_been_reset = true;
-            // }
-
-            if self.index == self.reset_pitch_at {
-                eprintln!("Resetting noise pitch");
-                noise.reset_pitch();
-            }
-
-            if let Some(sample) = noise.next() {
-                result += sample / 3.0;
-                done = false;
-            }
-        }
-
+        let result = self.buffer[self.index % SAMPLES_PER_FRAME];
         self.index += 1;
-
-        if done { None } else { Some(result) }
+        Some(result)
     }
 }
 

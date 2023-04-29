@@ -69,10 +69,6 @@ pub enum Command {
         instrument: u8,
         length: u8,
     },
-    DrumNoteShort {
-        instrument: u8,
-        length: u8,
-    },
     Rest(u8),
     NoteType {
         speed: u8,
@@ -105,11 +101,6 @@ pub enum Command {
     /// If larger than 0x100, large note speed or note length values might cause overflow. \
     /// Stored in big endian.
     Tempo(u16),
-    StereoPanning {
-        left: u8,
-        right: u8,
-    },
-    UnknownMusic0xEF(u8),
     Volume {
         left: u8,
         right: u8,
@@ -125,29 +116,6 @@ pub enum Command {
     Return,
 }
 
-struct CommandIterator<'a> {
-    rom: &'a [u8],
-    bank: u8,
-    addr: u16,
-    channel: ChannelType,
-}
-
-impl<'a> Iterator for CommandIterator<'a> {
-    type Item = Command;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let cmd = Command::parse(self.rom, self.bank, self.addr, self.channel);
-
-        if cmd == Command::Return {
-            return None;
-        }
-
-        self.addr += cmd.len() as u16;
-
-        Some(cmd)
-    }
-}
-
 impl Command {
     pub fn parse(rom: &[u8], bank: u8, addr: u16, channel: ChannelType) -> Command {
         let pos = ((bank as usize) * 0x4000) + ((addr as usize) & 0x3fff);
@@ -160,10 +128,6 @@ impl Command {
             ChannelType::SfxWave => Command::parse_sfx_wave(&rom[pos..]),
             ChannelType::SfxNoise => Command::parse_sfx_noise(&rom[pos..]),
         }
-    }
-
-    pub fn stream(rom: &[u8], bank: u8, addr: u16, channel: ChannelType) -> impl Iterator<Item = Command> + '_ {
-        CommandIterator { rom, bank, addr, channel }
     }
 
     fn parse_music_pulse(data: &[u8]) -> Command {
@@ -279,7 +243,6 @@ impl Command {
             Command::NoiseNote { .. } => 3,
             Command::Note { .. } => 1,
             Command::DrumNote { .. } => 2,
-            Command::DrumNoteShort { .. } => 1,
             Command::Rest(_) => 1,
             Command::NoteType { .. } => 2,
             Command::DrumSpeed(_) => 1,
@@ -289,8 +252,6 @@ impl Command {
             Command::PitchSlide { .. } => 3,
             Command::DutyCycle(_) => 2,
             Command::Tempo(_) => 3,
-            Command::StereoPanning { .. } => 2,
-            Command::UnknownMusic0xEF(_) => 2,
             Command::Volume { .. } => 2,
             Command::ExecuteMusic => 1,
             Command::DutyCyclePattern(_, _, _, _) => 2,
