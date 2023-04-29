@@ -1,4 +1,4 @@
-use crate::channel::{Channel, ChannelType, ChannelIterator};
+use crate::channel::{Channel, ChannelType, ChannelIterator, SAMPLES_PER_FRAME};
 
 #[derive(Debug)]
 pub struct Sound<'a> {
@@ -30,35 +30,35 @@ impl Sound<'_> {
             match id {
                 1 => assert!(result
                     .pulse1
-                    .replace(Channel::new(rom, bank, ptr, ChannelType::MusicPulse))
+                    .replace(Channel::new(rom, bank, ptr, ChannelType::MusicPulse, 1))
                     .is_none()),
                 2 => assert!(result
                     .pulse2
-                    .replace(Channel::new(rom, bank, ptr, ChannelType::MusicPulse))
+                    .replace(Channel::new(rom, bank, ptr, ChannelType::MusicPulse, 2))
                     .is_none()),
                 3 => assert!(result
                     .wave
-                    .replace(Channel::new(rom, bank, ptr, ChannelType::MusicWave))
+                    .replace(Channel::new(rom, bank, ptr, ChannelType::MusicWave, 3))
                     .is_none()),
                 4 => assert!(result
                     .noise
-                    .replace(Channel::new(rom, bank, ptr, ChannelType::MusicNoise))
+                    .replace(Channel::new(rom, bank, ptr, ChannelType::MusicNoise, 4))
                     .is_none()),
                 5 => assert!(result
                     .pulse1
-                    .replace(Channel::new(rom, bank, ptr, ChannelType::SfxPulse))
+                    .replace(Channel::new(rom, bank, ptr, ChannelType::SfxPulse, 5))
                     .is_none()),
                 6 => assert!(result
                     .pulse2
-                    .replace(Channel::new(rom, bank, ptr, ChannelType::SfxPulse))
+                    .replace(Channel::new(rom, bank, ptr, ChannelType::SfxPulse, 6))
                     .is_none()),
                 7 => assert!(result
                     .wave
-                    .replace(Channel::new(rom, bank, ptr, ChannelType::SfxWave))
+                    .replace(Channel::new(rom, bank, ptr, ChannelType::SfxWave, 7))
                     .is_none()),
                 8 => assert!(result
                     .noise
-                    .replace(Channel::new(rom, bank, ptr, ChannelType::SfxNoise))
+                    .replace(Channel::new(rom, bank, ptr, ChannelType::SfxNoise, 8))
                     .is_none()),
                 _ => panic!("Invalid SFX channel: {}", id),
             }
@@ -77,15 +77,27 @@ pub struct SoundIterator<'a> {
     pulse2: Option<ChannelIterator<'a>>,
     wave: Option<ChannelIterator<'a>>,
     noise: Option<ChannelIterator<'a>>,
+    index: usize,
+    reset_pitch_at: usize,
+    pitch_has_been_reset: bool,
 }
 
 impl<'a> SoundIterator<'a> {
     pub fn new(sound: &'a Sound<'a>, pitch: u8, length: i8) -> SoundIterator<'a> {
+        let pulse1_len = sound.pulse1.as_ref().map(|c| c.len(length).unwrap()).unwrap();
+        let pulse2_len = sound.pulse2.as_ref().map(|c| c.len(length).unwrap()).unwrap();
+
+        dbg!(pulse1_len);
+        dbg!(pulse2_len);
+
         SoundIterator {
             pulse1: sound.pulse1.as_ref().map(|c| c.pcm(pitch, length)),
             pulse2: sound.pulse2.as_ref().map(|c| c.pcm(pitch, length)),
             wave: sound.wave.as_ref().map(|c| c.pcm(pitch, length)),
             noise: sound.noise.as_ref().map(|c| c.pcm(pitch, length)),
+            index: 0,
+            reset_pitch_at: usize::max(pulse1_len, pulse2_len) - SAMPLES_PER_FRAME,
+            pitch_has_been_reset: false,
         }
     }
 }
@@ -129,9 +141,28 @@ impl<'a> Iterator for SoundIterator<'a> {
             }
         }
 
+        if (self.index - 1) == self.reset_pitch_at {
+            eprintln!("almost_done should be false at index {}, is {}", self.index, almost_done);
+        }
+
+        if self.index == self.reset_pitch_at {
+            eprintln!("almost_done should be true at index {}, is {}", self.index, almost_done);
+        }
+
+        if !self.pitch_has_been_reset && almost_done {
+            eprintln!("almost_done was true at index {}, should be at index {}", self.index, self.reset_pitch_at);
+            self.pitch_has_been_reset = true;
+        }
+
         if let Some(noise) = &mut self.noise {
-            if almost_done {
-                // eprintln!("Resetting noise pitch");
+            // if almost_done && !self.pitch_has_been_reset {
+            //     // eprintln!("Resetting noise pitch");
+            //     noise.reset_pitch();
+            //     self.pitch_has_been_reset = true;
+            // }
+
+            if self.index == self.reset_pitch_at {
+                eprintln!("Resetting noise pitch");
                 noise.reset_pitch();
             }
 
@@ -140,6 +171,8 @@ impl<'a> Iterator for SoundIterator<'a> {
                 done = false;
             }
         }
+
+        self.index += 1;
 
         if done { None } else { Some(result) }
     }

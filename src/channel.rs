@@ -48,11 +48,12 @@ pub struct Channel<'a> {
     bank: u8,
     addr: u16,
     channel: ChannelType,
+    id: u8,
 }
 
 impl Channel<'_> {
-    pub fn new(rom: &[u8], bank: u8, addr: u16, channel: ChannelType) -> Channel {
-        Channel { rom, bank, addr, channel }
+    pub fn new(rom: &[u8], bank: u8, addr: u16, channel: ChannelType, id: u8) -> Channel {
+        Channel { rom, bank, addr, channel, id }
     }
 
     /// Returns the length of the channel in samples, without the fadeout of the last note.
@@ -78,12 +79,15 @@ impl Channel<'_> {
                     channel = channel.to_muisc();
                 }
 
+                Command::DutyCycle(_) => {}
+                Command::DutyCyclePattern(_, _, _, _) => {}
+
                 Command::Loop { count, addr: target } => {
                     if count == 0 {
                         return None;
                     }
 
-                    if count < loop_counter {
+                    if loop_counter < count {
                         loop_counter += 1;
                         addr = target;
                         continue;
@@ -125,6 +129,7 @@ pub struct ChannelIterator<'a> {
     bank: u8,
     addr: u16,
     channel: ChannelType,
+    channel_id: u8,
     pitch: u8,
     length: i8,
     duty: u8,
@@ -133,7 +138,8 @@ pub struct ChannelIterator<'a> {
     loop_counter: u8,
     note_counter: u8,
     buffer: VecDeque<f32>,
-    is_done_in: Option<usize>,
+    // is_done_in: Option<usize>,
+    is_done: bool,
 }
 
 impl<'a> ChannelIterator<'a> {
@@ -149,17 +155,20 @@ impl<'a> ChannelIterator<'a> {
             period_count: 0.0,
             leftovers: 0,
             loop_counter: 1,
-            note_counter: 1,
+            note_counter: 0,
             buffer: VecDeque::new(),
-            is_done_in: None,
+            // is_done_in: None,
+            is_done: false,
+            channel_id: channel.id,
         }
     }
 
     pub fn only_fadeout_left(&self) -> bool {
-        self.is_done_in == Some(0)
+        self.is_done
     }
 
     pub fn reset_pitch(&mut self) {
+        eprintln!("Resetting pitch, the buffer length is {}", self.buffer.len());
         self.pitch = 0;
     }
 }
@@ -170,22 +179,35 @@ impl Iterator for ChannelIterator<'_> {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             if let Some(sample) = self.buffer.pop_front() {
-                if let Some(ref mut is_done_in) = self.is_done_in {
-                    if *is_done_in > 0 {
-                        *is_done_in -= 1;
-                    }
-                }
                 return Some(sample);
+            }
+
+            if self.is_done {
+                return None;
             }
 
             let cmd = Command::parse(self.rom, self.bank, self.addr, self.channel);
 
             // FIXME: This will read some extra bytes at the end of the song
-            let is_last_command = Command::parse(self.rom, self.bank, self.addr + (cmd.len() as u16), self.channel) == Command::Return;
+            let mut is_last_command = Command::parse(self.rom, self.bank, self.addr + (cmd.len() as u16), self.channel) == Command::Return;
+
+            if !is_last_command {
+                if let Command::Loop { count, .. } = Command::parse(self.rom, self.bank, self.addr + (cmd.len() as u16), self.channel)    {
+                    if count != 0 && self.loop_counter == count {
+                        is_last_command = Command::parse(self.rom, self.bank, self.addr + (cmd.len() as u16) + 4, self.channel) == Command::Return;
+                    }
+                }
+            }
 
             match cmd {
                 Command::Return => {
-                    return None;
+
+
+
+
+
+                    self.is_done = true;
+                    continue;
                 }
 
                 Command::ExecuteMusic => {
@@ -221,6 +243,8 @@ impl Iterator for ChannelIterator<'_> {
                 } => {
                     let mut volume = volume as isize;
 
+                    eprintln!("Ch{} Note {:?} at {:02x}:{:04x}", self.channel_id, cmd, self.bank, self.addr);
+
                     // number of samples for this single note
                     let subframes = (((self.length as isize) + 0x100) as usize)
                         // * (n_samples_per_note as usize + 1)
@@ -235,12 +259,18 @@ impl Iterator for ChannelIterator<'_> {
                         * (2048 - ((freq as usize + (self.pitch as usize)) & 0x7ff))
                         / 131072;
 
+                    // if is_last_command && self.note_counter == (n_samples_per_note - 1) {
+                    //     eprintln!("Ch{} Entering the last but one", self.channel_id);
+                    //     self.is_done_in = Some(0);
+                    // }
+
                     // apply this note
                     for index in 0..2500000 {
-                        if index == sample_count && is_last_command && self.note_counter == n_samples_per_note {
-                            eprintln!("Note {:?} is done in {} samples", cmd, self.buffer.len());
-                            self.is_done_in = Some(self.buffer.len());
-                        }
+                        // if sample_count > 0 && index == sample_count && is_last_command && self.note_counter == n_samples_per_note {
+                        //     eprintln!("Note {:?} is done in {} samples", cmd, self.buffer.len());
+                        //     // self.is_done_in = Some(self.buffer.len());
+                        //     self.is_done_in = Some(0);
+                        // }
 
                         if index >= sample_count && !(is_last_command && self.note_counter == n_samples_per_note && volume > 0) {
                             break;
@@ -274,7 +304,7 @@ impl Iterator for ChannelIterator<'_> {
                         self.note_counter += 1;
                         continue;
                     } else {
-                        self.note_counter = 1;
+                        self.note_counter = 0;
                     }
                 }
 
@@ -304,6 +334,9 @@ impl Iterator for ChannelIterator<'_> {
                     let mut noise_buffer: u16 = 0x7fff;
 
                     for index in 0..2500000 {
+                        // if index == sample_count && !(is_last_command && self.note_counter == n_samples_per_note && volume > 0) {
+                        //     eprintln!("Note {:?} is done in {} samples", cmd, self.buffer.len());
+                        // }
                         if index >= sample_count && !(is_last_command && self.note_counter == n_samples_per_note && volume > 0) {
                             break;
                         }
@@ -340,7 +373,7 @@ impl Iterator for ChannelIterator<'_> {
                         self.note_counter += 1;
                         continue;
                     } else {
-                        self.note_counter = 1;
+                        self.note_counter = 0;
                     }
                 }
 
