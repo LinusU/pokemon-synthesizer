@@ -46,12 +46,11 @@ pub struct Channel<'a> {
     bank: u8,
     addr: u16,
     channel: ChannelType,
-    id: u8,
 }
 
 impl Channel<'_> {
-    pub fn new(rom: &[u8], bank: u8, addr: u16, channel: ChannelType, id: u8) -> Channel {
-        Channel { rom, bank, addr, channel, id }
+    pub fn new(rom: &[u8], bank: u8, addr: u16, channel: ChannelType) -> Channel {
+        Channel { rom, bank, addr, channel }
     }
 
     /// Returns the length of the channel in samples, without the fadeout of the last note.
@@ -127,7 +126,6 @@ pub struct ChannelIterator<'a> {
     bank: u8,
     addr: u16,
     channel: ChannelType,
-    channel_id: u8,
 
     pitch: u8,
     length: i8,
@@ -156,7 +154,6 @@ impl<'a> ChannelIterator<'a> {
             bank: channel.bank,
             addr: channel.addr,
             channel: channel.channel,
-            channel_id: channel.id,
 
             pitch,
             length,
@@ -282,7 +279,6 @@ impl Iterator for ChannelIterator<'_> {
             // Read and process next command
 
             let cmd = Command::parse(self.rom, self.bank, self.addr, self.channel);
-            eprintln!("Ch{} {:?}", self.channel_id, cmd);
 
             match cmd {
                 Command::Return => {

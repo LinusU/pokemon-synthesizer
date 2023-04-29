@@ -30,35 +30,35 @@ impl Sound<'_> {
             match id {
                 1 => assert!(result
                     .pulse1
-                    .replace(Channel::new(rom, bank, ptr, ChannelType::MusicPulse, 1))
+                    .replace(Channel::new(rom, bank, ptr, ChannelType::MusicPulse))
                     .is_none()),
                 2 => assert!(result
                     .pulse2
-                    .replace(Channel::new(rom, bank, ptr, ChannelType::MusicPulse, 2))
+                    .replace(Channel::new(rom, bank, ptr, ChannelType::MusicPulse))
                     .is_none()),
                 3 => assert!(result
                     .wave
-                    .replace(Channel::new(rom, bank, ptr, ChannelType::MusicWave, 3))
+                    .replace(Channel::new(rom, bank, ptr, ChannelType::MusicWave))
                     .is_none()),
                 4 => assert!(result
                     .noise
-                    .replace(Channel::new(rom, bank, ptr, ChannelType::MusicNoise, 4))
+                    .replace(Channel::new(rom, bank, ptr, ChannelType::MusicNoise))
                     .is_none()),
                 5 => assert!(result
                     .pulse1
-                    .replace(Channel::new(rom, bank, ptr, ChannelType::SfxPulse, 5))
+                    .replace(Channel::new(rom, bank, ptr, ChannelType::SfxPulse))
                     .is_none()),
                 6 => assert!(result
                     .pulse2
-                    .replace(Channel::new(rom, bank, ptr, ChannelType::SfxPulse, 6))
+                    .replace(Channel::new(rom, bank, ptr, ChannelType::SfxPulse))
                     .is_none()),
                 7 => assert!(result
                     .wave
-                    .replace(Channel::new(rom, bank, ptr, ChannelType::SfxWave, 7))
+                    .replace(Channel::new(rom, bank, ptr, ChannelType::SfxWave))
                     .is_none()),
                 8 => assert!(result
                     .noise
-                    .replace(Channel::new(rom, bank, ptr, ChannelType::SfxNoise, 8))
+                    .replace(Channel::new(rom, bank, ptr, ChannelType::SfxNoise))
                     .is_none()),
                 _ => panic!("Invalid SFX channel: {}", id),
             }
@@ -79,18 +79,11 @@ pub struct SoundIterator<'a> {
     noise: Option<ChannelIterator<'a>>,
     index: usize,
     buffer: [f32; SAMPLES_PER_FRAME],
-    reset_pitch_at: usize,
     pitch_has_been_reset: bool,
 }
 
 impl<'a> SoundIterator<'a> {
     pub fn new(sound: &'a Sound<'a>, pitch: u8, length: i8) -> SoundIterator<'a> {
-        let pulse1_len = sound.pulse1.as_ref().map(|c| c.len(length).unwrap()).unwrap();
-        let pulse2_len = sound.pulse2.as_ref().map(|c| c.len(length).unwrap()).unwrap();
-
-        dbg!(pulse1_len);
-        dbg!(pulse2_len);
-
         SoundIterator {
             pulse1: sound.pulse1.as_ref().map(|c| c.pcm(pitch, length)),
             pulse2: sound.pulse2.as_ref().map(|c| c.pcm(pitch, length)),
@@ -98,7 +91,6 @@ impl<'a> SoundIterator<'a> {
             noise: sound.noise.as_ref().map(|c| c.pcm(pitch, 0)),
             index: 0,
             buffer: [0.0; SAMPLES_PER_FRAME],
-            reset_pitch_at: usize::max(pulse1_len, pulse2_len) - SAMPLES_PER_FRAME,
             pitch_has_been_reset: false,
         }
     }
@@ -153,12 +145,7 @@ impl<'a> Iterator for SoundIterator<'a> {
             }
 
             if let Some(noise) = &mut self.noise {
-                if self.index == self.reset_pitch_at {
-                    eprintln!("Should reset noise pitch here");
-                }
-
                 if fadeout && !self.pitch_has_been_reset {
-                    println!("Want to reset pitch at index {}, should be {}", self.index, self.reset_pitch_at);
                     self.pitch_has_been_reset = true;
                     noise.reset_pitch();
                 }
