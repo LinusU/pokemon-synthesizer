@@ -10,8 +10,8 @@ fn main() {
 
     let rom_path = &args[1];
     let bank_addr = &args[2];
-    let pitch: u8 = args[3].parse().unwrap();
-    let length: i8 = args[4].parse().unwrap();
+    let pitch: i8 = args[3].parse().unwrap();
+    let length: u8 = args[4].parse().unwrap();
 
     let rom: &'static [u8] = Box::new(std::fs::read(rom_path).unwrap()).leak();
 

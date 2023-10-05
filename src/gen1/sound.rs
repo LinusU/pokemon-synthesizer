@@ -69,7 +69,7 @@ impl<'a> Sound<'a> {
         result
     }
 
-    pub fn pcm(self, pitch: u8, length: i8) -> SoundIterator<'a> {
+    pub fn pcm(self, pitch: i8, length: u16) -> SoundIterator<'a> {
         SoundIterator::new(self, pitch, length)
     }
 }
@@ -86,12 +86,12 @@ pub struct SoundIterator<'a> {
 }
 
 impl<'a> SoundIterator<'a> {
-    pub fn new(sound: Sound<'a>, pitch: u8, length: i8) -> SoundIterator<'a> {
+    pub fn new(sound: Sound<'a>, pitch: i8, length: u16) -> SoundIterator<'a> {
         SoundIterator {
             pulse1: sound.pulse1.as_ref().map(|c| c.pcm(pitch, length)),
             pulse2: sound.pulse2.as_ref().map(|c| c.pcm(pitch, length)),
             wave: sound.wave.as_ref().map(|c| c.pcm(pitch, length)),
-            noise: sound.noise.as_ref().map(|c| c.pcm(pitch, 0)),
+            noise: sound.noise.as_ref().map(|c| c.pcm(pitch, 0x100)),
             index: 0,
             buffer: [0.0; SAMPLES_PER_FRAME],
             pitch_has_been_reset: false,

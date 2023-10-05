@@ -11,8 +11,8 @@ mod sound;
 
 #[derive(Debug, Clone)]
 pub struct Pcm<'a> {
-    pitch: u8,
-    length: i8,
+    pitch: i8,
+    length: u16,
     sound: Sound<'a>,
 }
 
@@ -42,11 +42,11 @@ impl<'a> Pcm<'a> {
     }
 }
 
-pub fn synthesis(rom: &[u8], bank: u8, addr: u16, pitch: u8, length: i8) -> Pcm {
+pub fn synthesis(rom: &[u8], bank: u8, addr: u16, pitch: i8, length: u8) -> Pcm {
     Pcm {
         sound: Sound::new(rom, bank, addr),
         pitch,
-        length,
+        length: (length as u16) + 0x80,
     }
 }
 
@@ -126,7 +126,7 @@ mod tests {
 
     #[test]
     fn test_bulbasaur_cry() {
-        let pcm = synthesis(POKEYELLOW, 0x02, 0x40c3, 128, -127);
+        let pcm = synthesis(POKEYELLOW, 0x02, 0x40c3, -128, 1);
 
         assert_wav_almost_equal(
             &convert_to_wav(&pcm),
@@ -136,7 +136,7 @@ mod tests {
 
     #[test]
     fn test_diglett_cry() {
-        let pcm = synthesis(POKEYELLOW, 0x02, 0x409f, 170, -127);
+        let pcm = synthesis(POKEYELLOW, 0x02, 0x409f, -86, 1);
 
         assert_wav_almost_equal(
             &convert_to_wav(&pcm),
@@ -146,7 +146,7 @@ mod tests {
 
     #[test]
     fn test_jigglypuff_cry() {
-        let pcm = synthesis(POKEYELLOW, 0x02, 0x40ba, 255, -75);
+        let pcm = synthesis(POKEYELLOW, 0x02, 0x40ba, -1, 53);
 
         assert_wav_almost_equal(
             &convert_to_wav(&pcm),
@@ -156,7 +156,7 @@ mod tests {
 
     #[test]
     fn test_snorlax_cry() {
-        let pcm = synthesis(POKEYELLOW, 0x02, 0x4069, 85, -127);
+        let pcm = synthesis(POKEYELLOW, 0x02, 0x4069, 85, 1);
 
         assert_wav_almost_equal(
             &convert_to_wav(&pcm),
@@ -166,17 +166,17 @@ mod tests {
 
     #[test]
     fn test_aerodactyl_cry() {
-        let pcm = synthesis(POKEYELLOW, 0x02, 0x40b1, 32, 112);
+        let pcm = synthesis(POKEYELLOW, 0x02, 0x4177, 32, 240);
 
         assert_wav_almost_equal(
             &convert_to_wav(&pcm),
-            include_bytes!("../../expected/aerodactyl-cry-wrong.wav"),
+            include_bytes!("../../expected/aerodactyl-cry.wav"),
         );
     }
 
     #[test]
     fn test_pikachu_cry() {
-        let pcm = synthesis(POKEYELLOW, 0x02, 0x40c3, 238, -127);
+        let pcm = synthesis(POKEYELLOW, 0x02, 0x40c3, -18, 1);
 
         assert_wav_almost_equal(
             &convert_to_wav(&pcm),
@@ -186,7 +186,7 @@ mod tests {
 
     #[test]
     fn test_slowpoke_cry() {
-        let pcm = synthesis(POKEYELLOW, 0x02, 0x404e, 0, 0);
+        let pcm = synthesis(POKEYELLOW, 0x02, 0x404e, 0, 128);
 
         assert_wav_almost_equal(
             &convert_to_wav(&pcm),
