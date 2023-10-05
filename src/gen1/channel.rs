@@ -70,7 +70,7 @@ pub struct ChannelIterator<'a> {
     addr: u16,
     channel: ChannelType,
 
-    length: u16,
+    length: usize,
 
     pitch: i8,
     pitch_sweep: i8,
@@ -78,8 +78,7 @@ pub struct ChannelIterator<'a> {
     pitch_sweep_period: u8,
 
     loop_counter: u8,
-    note_delay: u8,
-    note_delay_fraction: u8,
+    note_delay: usize,
 
     duty: u8,
     volume: u8,
@@ -104,7 +103,7 @@ impl<'a> ChannelIterator<'a> {
             addr: channel.addr,
             channel: channel.channel,
 
-            length,
+            length: length as usize,
 
             pitch,
             pitch_sweep: 0,
@@ -113,7 +112,6 @@ impl<'a> ChannelIterator<'a> {
 
             loop_counter: 1,
             note_delay: 0,
-            note_delay_fraction: 0,
 
             duty: 0,
             volume: 0,
@@ -150,7 +148,7 @@ impl Iterator for ChannelIterator<'_> {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             // Generate sound data
-            if self.note_delay > 0 || self.is_done {
+            if self.note_delay > 0xff || self.is_done {
                 if self.is_done && self.volume == 0 {
                     return None;
                 }
@@ -214,8 +212,8 @@ impl Iterator for ChannelIterator<'_> {
                     channel => todo!("Channel {:?}", channel),
                 }
 
-                if self.note_delay > 0 {
-                    self.note_delay -= 1;
+                if self.note_delay >= 0x100 {
+                    self.note_delay -= 0x100;
                 }
 
                 // once per frame * fadeamount, adjust volume
@@ -306,11 +304,8 @@ impl Iterator for ChannelIterator<'_> {
                     freq,
                 } => {
                     // number of samples for this single note
-                    let subframes = (self.length as usize) * (length as usize + 1)
-                        + (self.note_delay_fraction as usize);
-
-                    self.note_delay = (subframes >> 8) as u8;
-                    self.note_delay_fraction = (subframes & 0xff) as u8;
+                    self.note_delay =
+                        self.length * (length as usize + 1) + (self.note_delay & 0xff);
 
                     self.volume = volume;
                     self.volume_fade = fade;
@@ -325,11 +320,8 @@ impl Iterator for ChannelIterator<'_> {
                     value,
                 } => {
                     // number of samples for this single note
-                    let subframes = (self.length as usize) * (length as usize + 1)
-                        + (self.note_delay_fraction as usize);
-
-                    self.note_delay = (subframes >> 8) as u8;
-                    self.note_delay_fraction = (subframes & 0xff) as u8;
+                    self.note_delay =
+                        self.length * (length as usize + 1) + (self.note_delay & 0xff);
 
                     self.volume = volume;
                     self.volume_fade = fade;
