@@ -1,4 +1,4 @@
-use crate::command::Command;
+use super::command::Command;
 
 pub const SAMPLES_PER_FRAME: usize = 17556;
 pub const SOURCE_SAMPLE_RATE: usize = 1048576;
@@ -58,7 +58,7 @@ impl<'a> Channel<'a> {
         }
     }
 
-    pub fn pcm(self, pitch: u8, length: i8) -> ChannelIterator<'a> {
+    pub fn pcm(self, pitch: i16, length: u16) -> ChannelIterator<'a> {
         ChannelIterator::new(self, pitch, length)
     }
 }
@@ -70,16 +70,15 @@ pub struct ChannelIterator<'a> {
     addr: u16,
     channel: ChannelType,
 
-    length: i8,
+    length: usize,
 
-    pitch: u8,
+    pitch: i16,
     pitch_sweep: i8,
     pitch_sweep_delay: u8,
     pitch_sweep_period: u8,
 
     loop_counter: u8,
-    note_delay: u8,
-    note_delay_fraction: u8,
+    note_delay: usize,
 
     duty: u8,
     volume: u8,
@@ -97,14 +96,14 @@ pub struct ChannelIterator<'a> {
 }
 
 impl<'a> ChannelIterator<'a> {
-    fn new(channel: Channel<'a>, pitch: u8, length: i8) -> ChannelIterator<'a> {
+    fn new(channel: Channel<'a>, pitch: i16, length: u16) -> ChannelIterator<'a> {
         Self {
             rom: channel.rom,
             bank: channel.bank,
             addr: channel.addr,
             channel: channel.channel,
 
-            length,
+            length: length as usize,
 
             pitch,
             pitch_sweep: 0,
@@ -113,7 +112,6 @@ impl<'a> ChannelIterator<'a> {
 
             loop_counter: 1,
             note_delay: 0,
-            note_delay_fraction: 0,
 
             duty: 0,
             volume: 0,
@@ -131,14 +129,6 @@ impl<'a> ChannelIterator<'a> {
         }
     }
 
-    pub fn only_fadeout_left(&self) -> bool {
-        self.is_done
-    }
-
-    pub fn reset_pitch(&mut self) {
-        self.pitch = 0;
-    }
-
     pub fn is_infinite(&self) -> Option<bool> {
         self.is_infinite
     }
@@ -149,19 +139,20 @@ impl Iterator for ChannelIterator<'_> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            // Generate sound data
-            if self.note_delay > 0 || self.is_done {
-                if self.is_done && self.volume == 0 {
-                    return None;
-                }
+            if self.is_done {
+                return None;
+            }
 
+            // Generate sound data
+            if self.note_delay > 0xff {
                 let mut result = [0.0; SAMPLES_PER_FRAME];
 
                 match self.channel {
                     ChannelType::SfxPulse => {
                         // number of samples for a single period of the note's pitch
                         let period = SOURCE_SAMPLE_RATE
-                            * (2048 - ((self.freq as usize + (self.pitch as usize)) & 0x7ff))
+                            * (2048
+                                - ((self.freq as usize + ((self.pitch as u16) as usize)) & 0x7ff))
                             / 131072;
 
                         // apply this note
@@ -213,8 +204,8 @@ impl Iterator for ChannelIterator<'_> {
                     channel => todo!("Channel {:?}", channel),
                 }
 
-                if self.note_delay > 0 {
-                    self.note_delay -= 1;
+                if self.note_delay >= 0x100 {
+                    self.note_delay -= 0x100;
                 }
 
                 // once per frame * fadeamount, adjust volume
@@ -305,12 +296,8 @@ impl Iterator for ChannelIterator<'_> {
                     freq,
                 } => {
                     // number of samples for this single note
-                    let subframes = (((self.length as isize) + 0x100) as usize)
-                        * (length as usize + 1)
-                        + (self.note_delay_fraction as usize);
-
-                    self.note_delay = (subframes >> 8) as u8;
-                    self.note_delay_fraction = (subframes & 0xff) as u8;
+                    self.note_delay =
+                        self.length * (length as usize + 1) + (self.note_delay & 0xff);
 
                     self.volume = volume;
                     self.volume_fade = fade;
@@ -325,18 +312,18 @@ impl Iterator for ChannelIterator<'_> {
                     value,
                 } => {
                     // number of samples for this single note
-                    let subframes = (((self.length as isize) + 0x100) as usize)
-                        * (length as usize + 1)
-                        + (self.note_delay_fraction as usize);
-
-                    self.note_delay = (subframes >> 8) as u8;
-                    self.note_delay_fraction = (subframes & 0xff) as u8;
+                    self.note_delay =
+                        self.length * (length as usize + 1) + (self.note_delay & 0xff);
 
                     self.volume = volume;
                     self.volume_fade = fade;
                     self.volume_fade_delay = (fade & 0b111) as u8;
-                    self.noise_params = value.wrapping_add(self.pitch);
+                    self.noise_params = value.wrapping_add(self.pitch as u8);
                     self.noise_buffer = 0x7fff;
+                }
+
+                Command::PitchOffset(offset) => {
+                    self.pitch = offset;
                 }
 
                 _ => todo!("PCM data of {:?}", cmd),

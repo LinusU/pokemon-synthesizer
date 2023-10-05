@@ -19,7 +19,7 @@ fn main() {
     let bank: u8 = u8::from_str_radix(bank_addr.next().unwrap(), 16).unwrap();
     let addr: u16 = u16::from_str_radix(bank_addr.next().unwrap(), 16).unwrap();
 
-    let input = pokemon_synthesizer::synthesis(rom, bank, addr, pitch, length);
+    let input = pokemon_synthesizer::gen1::synthesis(rom, bank, addr, pitch, length);
     let mut input_len = input.iter().count();
 
     if input_len == usize::MAX {

@@ -1,4 +1,4 @@
-use pokemon_synthesizer::SoundIterator;
+use pokemon_synthesizer::gen1::SoundIterator;
 use rodio::{OutputStream, Source};
 
 struct PcmSource<'a>(SoundIterator<'a>);
@@ -54,7 +54,7 @@ fn main() {
     let bank: u8 = u8::from_str_radix(bank_addr.next().unwrap(), 16).unwrap();
     let addr: u16 = u16::from_str_radix(bank_addr.next().unwrap(), 16).unwrap();
 
-    let pcm = pokemon_synthesizer::synthesis(rom, bank, addr, pitch, length);
+    let pcm = pokemon_synthesizer::gen1::synthesis(rom, bank, addr, pitch, length);
     let duration = pcm.total_duration().unwrap_or(std::time::Duration::MAX);
 
     let (_stream, stream_handle) = OutputStream::try_default().unwrap();
