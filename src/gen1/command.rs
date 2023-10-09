@@ -1,4 +1,4 @@
-use crate::channel::ChannelType;
+use super::channel::ChannelType;
 
 trait FromI4 {
     fn from_i4(data: u8) -> Self;

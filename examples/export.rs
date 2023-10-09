@@ -10,8 +10,8 @@ fn main() {
 
     let rom_path = &args[1];
     let bank_addr = &args[2];
-    let pitch: u8 = args[3].parse().unwrap();
-    let length: i8 = args[4].parse().unwrap();
+    let pitch: i8 = args[3].parse().unwrap();
+    let length: u8 = args[4].parse().unwrap();
 
     let rom: &'static [u8] = Box::new(std::fs::read(rom_path).unwrap()).leak();
 
@@ -19,7 +19,7 @@ fn main() {
     let bank: u8 = u8::from_str_radix(bank_addr.next().unwrap(), 16).unwrap();
     let addr: u16 = u16::from_str_radix(bank_addr.next().unwrap(), 16).unwrap();
 
-    let input = pokemon_synthesizer::synthesis(rom, bank, addr, pitch, length);
+    let input = pokemon_synthesizer::gen1::synthesis(rom, bank, addr, pitch, length);
     let mut input_len = input.iter().count();
 
     if input_len == usize::MAX {

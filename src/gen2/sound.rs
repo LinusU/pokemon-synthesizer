@@ -1,4 +1,4 @@
-use crate::channel::{
+use super::channel::{
     Channel, ChannelIterator, ChannelType, SAMPLES_PER_FRAME, SOURCE_SAMPLE_RATE,
 };
 
@@ -69,7 +69,7 @@ impl<'a> Sound<'a> {
         result
     }
 
-    pub fn pcm(self, pitch: u8, length: i8) -> SoundIterator<'a> {
+    pub fn pcm(self, pitch: i16, length: u16) -> SoundIterator<'a> {
         SoundIterator::new(self, pitch, length)
     }
 }
@@ -82,19 +82,17 @@ pub struct SoundIterator<'a> {
     noise: Option<ChannelIterator<'a>>,
     index: usize,
     buffer: [f32; SAMPLES_PER_FRAME],
-    pitch_has_been_reset: bool,
 }
 
 impl<'a> SoundIterator<'a> {
-    pub fn new(sound: Sound<'a>, pitch: u8, length: i8) -> SoundIterator<'a> {
+    pub fn new(sound: Sound<'a>, pitch: i16, length: u16) -> SoundIterator<'a> {
         SoundIterator {
             pulse1: sound.pulse1.as_ref().map(|c| c.pcm(pitch, length)),
             pulse2: sound.pulse2.as_ref().map(|c| c.pcm(pitch, length)),
             wave: sound.wave.as_ref().map(|c| c.pcm(pitch, length)),
-            noise: sound.noise.as_ref().map(|c| c.pcm(pitch, 0)),
+            noise: sound.noise.as_ref().map(|c| c.pcm(pitch, 0x100)),
             index: 0,
             buffer: [0.0; SAMPLES_PER_FRAME],
-            pitch_has_been_reset: false,
         }
     }
 
@@ -115,15 +113,10 @@ impl<'a> Iterator for SoundIterator<'a> {
 
         loop {
             let mut done = true;
-            let mut fadeout = true;
 
             if let Some(pulse1) = &mut self.pulse1 {
                 if pulse1.next().is_some() {
                     done = false;
-
-                    if !pulse1.only_fadeout_left() {
-                        fadeout = false;
-                    }
                 }
 
                 if pulse1.is_infinite() == Some(true) {
@@ -134,10 +127,6 @@ impl<'a> Iterator for SoundIterator<'a> {
             if let Some(pulse2) = &mut self.pulse2 {
                 if pulse2.next().is_some() {
                     done = false;
-
-                    if !pulse2.only_fadeout_left() {
-                        fadeout = false;
-                    }
                 }
 
                 if pulse2.is_infinite() == Some(true) {
@@ -156,11 +145,6 @@ impl<'a> Iterator for SoundIterator<'a> {
             }
 
             if let Some(noise) = &mut self.noise {
-                if fadeout && !self.pitch_has_been_reset {
-                    self.pitch_has_been_reset = true;
-                    noise.reset_pitch();
-                }
-
                 if noise.next().is_some() {
                     done = false;
                 }
@@ -183,7 +167,6 @@ impl<'a> Iterator for SoundIterator<'a> {
             self.buffer.fill(0.0);
 
             let mut done = true;
-            let mut fadeout = true;
 
             if let Some(pulse1) = &mut self.pulse1 {
                 if let Some(data) = pulse1.next() {
@@ -192,10 +175,6 @@ impl<'a> Iterator for SoundIterator<'a> {
                     }
 
                     done = false;
-
-                    if !pulse1.only_fadeout_left() {
-                        fadeout = false;
-                    }
                 }
             }
 
@@ -206,10 +185,6 @@ impl<'a> Iterator for SoundIterator<'a> {
                     }
 
                     done = false;
-
-                    if !pulse2.only_fadeout_left() {
-                        fadeout = false;
-                    }
                 }
             }
 
@@ -224,11 +199,6 @@ impl<'a> Iterator for SoundIterator<'a> {
             }
 
             if let Some(noise) = &mut self.noise {
-                if fadeout && !self.pitch_has_been_reset {
-                    self.pitch_has_been_reset = true;
-                    noise.reset_pitch();
-                }
-
                 if let Some(data) = noise.next() {
                     for (i, data) in data.iter().enumerate() {
                         self.buffer[i] += data / 3.0;
