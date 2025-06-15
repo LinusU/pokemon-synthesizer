@@ -193,4 +193,14 @@ mod tests {
             include_bytes!("../../expected/slowpoke-cry.wav"),
         );
     }
+
+    #[test]
+    fn test_ladyba_cry() {
+        let pcm = synthesis(POKECRYSTAL, 0x3c, 0x6ded, 0, 222);
+
+        assert_wav_almost_equal(
+            &convert_to_wav(&pcm),
+            include_bytes!("../../expected/ladyba-cry.wav"),
+        );
+    }
 }

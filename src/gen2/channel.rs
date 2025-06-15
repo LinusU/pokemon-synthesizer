@@ -326,6 +326,11 @@ impl Iterator for ChannelIterator<'_> {
                     self.pitch = offset;
                 }
 
+                Command::SoundJump(addr) => {
+                    self.addr = addr;
+                    continue;
+                }
+
                 _ => todo!("PCM data of {:?}", cmd),
             }
 

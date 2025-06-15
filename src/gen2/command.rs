@@ -108,6 +108,7 @@ pub enum Command {
     ExecuteMusic,
     DutyCyclePattern(u8, u8, u8, u8),
     SoundCall(u16),
+    SoundJump(u16),
     Loop {
         count: u8,
         addr: u16,
@@ -211,6 +212,7 @@ impl Command {
             0xdd => Command::PitchSweep { length: (data[1] >> 4), change: i8::from_i4(data[1]) },
             0xde => Command::DutyCyclePattern(data[1] >> 6, (data[1] >> 4) & 0x03, (data[1] >> 2) & 0x03, data[1] & 0x03),
             0xe6 => Command::PitchOffset(i16::from_be_bytes([data[1], data[2]])),
+            0xfc => Command::SoundJump(u16::from_le_bytes([data[1], data[2]])),
             0xfd => Command::Loop { count: data[1], addr: u16::from_le_bytes([data[2], data[3]]) },
             0xfe => Command::SoundCall(u16::from_le_bytes([data[1], data[2]])),
             0xff => Command::Return,
@@ -258,6 +260,7 @@ impl Command {
             Command::ExecuteMusic => 1,
             Command::DutyCyclePattern(_, _, _, _) => 2,
             Command::SoundCall(_) => 3,
+            Command::SoundJump(_) => 3,
             Command::Loop { .. } => 4,
             Command::Return => 1,
         }
