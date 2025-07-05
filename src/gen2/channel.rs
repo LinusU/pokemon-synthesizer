@@ -69,6 +69,7 @@ pub struct ChannelIterator<'a> {
     bank: u8,
     addr: u16,
     channel: ChannelType,
+    stack: Vec<u16>,
 
     length: usize,
 
@@ -102,6 +103,7 @@ impl<'a> ChannelIterator<'a> {
             bank: channel.bank,
             addr: channel.addr,
             channel: channel.channel,
+            stack: Vec::new(),
 
             length: length as usize,
 
@@ -252,8 +254,13 @@ impl Iterator for ChannelIterator<'_> {
 
             match cmd {
                 Command::Return => {
-                    self.is_done = true;
-                    self.is_infinite = Some(false);
+                    if let Some(addr) = self.stack.pop() {
+                        self.addr = addr;
+                    } else {
+                        self.is_done = true;
+                        self.is_infinite = Some(false);
+                    }
+
                     continue;
                 }
 
@@ -324,6 +331,12 @@ impl Iterator for ChannelIterator<'_> {
 
                 Command::PitchOffset(offset) => {
                     self.pitch = offset;
+                }
+
+                Command::SoundCall(addr) => {
+                    self.stack.push(self.addr + cmd.len() as u16);
+                    self.addr = addr;
+                    continue;
                 }
 
                 Command::SoundJump(addr) => {
