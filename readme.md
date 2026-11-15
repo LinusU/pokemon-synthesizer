@@ -15,11 +15,11 @@ Implementation status:
 - [x] Gen 2
     - [x] Pulse channels
     - [x] Noise channels
-    - [ ] Wave channels
+    - [ ] Wave channels (in music only)
     - [x] Finite loops
     - [x] Infinite loops
     - [x] Pitch sweeps
-    - [ ] Music sequences
+    - [x] Music sequences
 - [ ] Future generations
 
 ## Installation
@@ -47,6 +47,23 @@ pcm.total_duration()
 
 // Iterator<Item = f32>
 pcm.iter()
+```
+
+### Music
+
+Music from Gold, Silver and Crystal is played the way the games' own sound engine plays it, from the address of a song's header, such as one from the `Music` table that the games' `PlayMusic` reads:
+
+```rust
+const rom = std::fs::read("pokecrystal.gbc").unwrap();
+
+// Title screen, at 48 kHz
+let music = pokemon_synthesizer::gen2::music(&rom, 0x3a, 0x7808, 48_000).unwrap();
+
+// 1
+music.channels()
+
+// Iterator<Item = f32>, which never ends for songs that loop
+music.take(48_000 * 10)
 ```
 
 ## Testing

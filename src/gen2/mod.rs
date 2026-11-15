@@ -3,10 +3,12 @@ use std::time::Duration;
 use channel::SOURCE_SAMPLE_RATE;
 use sound::Sound;
 
+pub use music::{music, MusicIterator};
 pub use sound::SoundIterator;
 
 mod channel;
 mod command;
+mod music;
 mod sound;
 
 #[derive(Debug, Clone)]
@@ -120,6 +122,35 @@ mod tests {
             assert!(
                 (*actual as i32 - *expected as i32).abs() <= 1,
                 "actual: {actual}, expected: {expected}, at index: {index}",
+            );
+        }
+    }
+
+    #[test]
+    fn test_every_song_plays() {
+        // The `Music` table that `PlayMusic` reads, at 3a:506e.
+        const MUSIC: usize = 0x3a * 0x4000 + 0x106e;
+        const SONGS: usize = 0x67;
+        const RATE: u32 = 48000;
+
+        // The first song is silence.
+        for id in 1..SONGS {
+            let entry = &POKECRYSTAL[MUSIC + id * 3..];
+            let bank = entry[0];
+            let addr = u16::from_le_bytes([entry[1], entry[2]]);
+
+            let samples: Vec<f32> = music(POKECRYSTAL, bank, addr, RATE)
+                .unwrap()
+                .take(RATE as usize * 5)
+                .collect();
+
+            assert!(
+                samples.iter().any(|s| s.abs() > 0.05),
+                "song {id:#04x} is silent",
+            );
+            assert!(
+                samples.iter().all(|s| s.abs() <= 1.0),
+                "song {id:#04x} clips",
             );
         }
     }
