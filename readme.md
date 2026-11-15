@@ -66,6 +66,8 @@ music.channels()
 music.take(48_000 * 10)
 ```
 
+`examples/music.rs` renders a song to a WAV file.
+
 ## Testing
 
 In order to run the `gen1` tests, you need a ROM file for Pokemon Yellow. The ROM file should have the SHA1 hash `cc7d03262ebfaf2f06772c1a480c7d9d5f4a38e1` and be named `roms/pokeyellow.gbc`.
